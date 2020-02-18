@@ -1,0 +1,5 @@
+*.log
+venv/*
+/.idea/workspace.xml
+/.idea/.gitignore
+/.idea/*
