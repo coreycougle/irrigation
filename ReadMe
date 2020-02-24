@@ -1,6 +1,0 @@
-Update config
-    Add your Weather Network API key from https://store.api.pelmorex.com
-    Add your country eg. CA or US
-    Add your city eg. Toronto or New-York
-
-Use cron to schedule execution of Irrigation.py

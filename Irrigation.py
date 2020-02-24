@@ -3,6 +3,8 @@ import requests
 import logging
 import os
 import configparser
+import RPi.GPIO as IO
+import time
 
 logger = logging.getLogger()
 file_handler = logging.FileHandler('Irrigation.log')
@@ -12,16 +14,16 @@ file_handler.setLevel(logging.DEBUG)
 logger.addHandler(file_handler)
 logger.setLevel(logging.DEBUG)
 
-
 def get_config():
     config = configparser.ConfigParser()
     dir = os.path.abspath(os.path.dirname(__file__))
-    config.read(dir + '\config')
-    if(config.has_section('Default')):
-        return {param:val for (param, val) in config.items('Default')}
+    config_path = dir + os.sep + 'config'
+    config.read(config_path)
+    if(config.has_section('Weather_API') and config.has_section('IO_Config')):
+        return {param:val for (param, val) in config.items('Weather_API')}, {param:val for (param, val) in config.items('IO_Config')}
     else:
-        logger.error('Configuration file is missing Default section')
-        return None
+        logger.error('Configuration file is missing a section')
+        return None, None
 
 def get_weather(config):
     headers = {'Accept': 'application/json',
@@ -36,28 +38,45 @@ def get_weather(config):
         logger.error('Bad Response, %s', response)
         return None
 
-def activate_irrigation():
-    #todo: Output to pi headers to activate valve for some period of time
-    logger.info("Irrigation activated")
+def activate_irrigation(config):
+    try:
+        IO.setwarnings(False)
+        IO.setmode(IO.BCM)
+        valve1 = int(config['valve1'])
+        valve2 = int(config['valve2'])
+        led = int(config['led'])
+        IO.setup((valve1, valve2, led), IO.OUT)
+        IO.output((valve1, valve2, led), IO.HIGH)
+        logger.info("Irrigation activated")
+        time.sleep(int(config['duration_minutes']) * 60)
+        IO.output((valve1, valve2, led), IO.LOW)
+        logger.info("Irrigation deactivated")
+    except Exception:
+        IO.output((valve1, valve2, led), IO.LOW)
+        logger.exception('GPIO failure')
 
 def main():
-    config = get_config()
+    weather_config, io_config = get_config()
 
-    if config is not None:
-        weather = get_weather(config)
+    if weather_config is not None:
+        weather = get_weather(weather_config)
+    else:
+        logger.error('Weather config is missing')
 
     if weather is not None:
         popToday = int(weather['LongTermPeriod'][0]['POPPercentDay'])
         popTomorrow = int(weather['LongTermPeriod'][1]['POPPercentDay'])
-        if (popToday + popTomorrow >= 150):
+        if popToday + popTomorrow >= 150:
             logger.info("Irrigation not activated due to PoP of " + str(popToday + popTomorrow) + " in the next 2 days")
-        else:
+        elif io_config is not None:
             logger.info('Activating irrigation due to PoP of ' + str((popToday + popTomorrow)/2) + ' in the next 2 days')
-            activate_irrigation()
+            activate_irrigation(io_config)
+        else:
+            # Once configured, the IO config won't change, so no need to include it with the user notification logic
+            logger.error('IO config is missing')
 
-    else:
-        print('Failed request')
-        # todo: Notify user
+    # else:
+        # todo: Notify user regarding issues with weather API service
 
 if __name__ == "__main__":
     main()
