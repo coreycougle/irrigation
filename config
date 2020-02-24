@@ -1,5 +1,12 @@
-[Default]
+[Weather_API]
 api_key = yourWeatherNetworkKeyHere
 api_url_base = https://api.data.pelmorex.com/weather/LongTermForecasts/
 country = CA
 city = Toronto
+
+
+[IO_Config]
+valve1 = 27
+valve2 = 22
+led = 17
+duration_minutes = 20
