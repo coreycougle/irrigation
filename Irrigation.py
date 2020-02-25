@@ -1,10 +1,11 @@
-import json
-import requests
-import logging
 import os
+import sys
+import json
+import time
+import logging
+import requests
 import configparser
 import RPi.GPIO as IO
-import time
 
 logger = logging.getLogger()
 file_handler = logging.FileHandler('Irrigation.log')
@@ -57,7 +58,7 @@ def activate_irrigation(config):
 
 def main():
     weather_config, io_config = get_config()
-
+    weather = None
     if weather_config is not None:
         weather = get_weather(weather_config)
     else:
@@ -78,5 +79,49 @@ def main():
     # else:
         # todo: Notify user regarding issues with weather API service
 
+def force():
+    config = get_config()
+    activate_irrigation(config[1])
+
+def test_signal():
+    config = get_config()
+    try:
+        IO.setwarnings(False)
+        IO.setmode(IO.BCM)
+        led = int(config[1]['led'])
+        IO.setup(led, IO.OUT)
+        for i in range(3):
+            IO.output(led, IO.HIGH)
+            time.sleep(1)
+            IO.output(led, IO.LOW)
+            time.sleep(1)
+        logger.info("Test Signal Successful")
+    except Exception:
+        IO.output(led, IO.LOW)
+        logger.exception('Test Signal Failed: GPIO failure')
+
+def test_valve():
+    config = get_config()
+    try:
+        IO.setwarnings(False)
+        IO.setmode(IO.BCM)
+        valve1 = int(config[1]['valve1'])
+        valve2 = int(config[1]['valve2'])
+        IO.setup((valve1,valve2), IO.OUT)
+        IO.output((valve1,valve2), IO.HIGH)
+        time.sleep(5)
+        IO.output((valve1,valve2), IO.LOW)
+        logger.info("Test Valve Successful")
+    except Exception:
+        IO.output((valve1,valve2), IO.LOW)
+        logger.exception('Test Valve Failed: GPIO failure')
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 1:
+        main()
+    elif len(sys.argv) == 2 and (sys.argv[1] == '-f' or sys.argv[1] == '-force'):
+        force()
+    elif len(sys.argv) == 2 and sys.argv[1] == 'testsignal':
+        test_signal()
+    elif len(sys.argv) == 2 and sys.argv[1] == 'testvalve':
+        test_valve()
