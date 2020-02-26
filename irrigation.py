@@ -8,13 +8,14 @@ import configparser
 import RPi.GPIO as IO
 
 logger = logging.getLogger()
-file_handler = logging.FileHandler('Irrigation.log')
+file_handler = logging.FileHandler('irrigation.log')
 log_formatter = logging.Formatter('%(asctime)s-%(levelname)s-%(message)s')
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.DEBUG)
 logger.addHandler(file_handler)
 logger.setLevel(logging.DEBUG)
 
+# Grabs config file and returns weather configuration and io configuration as separate objects or as None
 def get_config():
     config = configparser.ConfigParser()
     dir = os.path.abspath(os.path.dirname(__file__))
@@ -26,6 +27,8 @@ def get_config():
         logger.error('Configuration file is missing a section')
         return None, None
 
+#Takes the weather configuration and calls the weather API
+# then returns a collection of forcasted weather data
 def get_weather(config):
     headers = {'Accept': 'application/json',
                'x-api-key': config['api_key']}
@@ -39,6 +42,7 @@ def get_weather(config):
         logger.error('Bad Response, %s', response)
         return None
 
+# Takes the io configuration and activates the irrigation valves
 def activate_irrigation(config):
     try:
         IO.setwarnings(False)
@@ -47,15 +51,22 @@ def activate_irrigation(config):
         valve2 = int(config['valve2'])
         led = int(config['led'])
         IO.setup((valve1, valve2, led), IO.OUT)
-        IO.output((valve1, valve2, led), IO.HIGH)
+        IO.output((valve1, valve2), IO.HIGH)
         logger.info("Irrigation activated")
-        time.sleep(int(config['duration_minutes']) * 60)
+        for i in range(int(config['duration_minutes']) * 30):
+            IO.output(led, IO.HIGH)
+            time.sleep(1)
+            IO.output(led, IO.LOW)
+            time.sleep(1)
         IO.output((valve1, valve2, led), IO.LOW)
         logger.info("Irrigation deactivated")
     except Exception:
         IO.output((valve1, valve2, led), IO.LOW)
         logger.exception('GPIO failure')
 
+# Checks if weather and io_config contain usable data,
+# then checks if it will rain today or tomorrow,
+# only activating irrigation if the combined PoP is below 150
 def main():
     weather_config, io_config = get_config()
     weather = None
@@ -79,10 +90,12 @@ def main():
     # else:
         # todo: Notify user regarding issues with weather API service
 
+# Forces the activate_irrigation method when irrigation.py is run with -f or -force
 def force():
     config = get_config()
     activate_irrigation(config[1])
 
+# Flashes the test led when irrigation.py is run with -testsignal
 def test_signal():
     config = get_config()
     try:
@@ -100,6 +113,7 @@ def test_signal():
         IO.output(led, IO.LOW)
         logger.exception('Test Signal Failed: GPIO failure')
 
+# Activates the irrigation valves for 5 seconds when irrigation.py is run with -testvalve
 def test_valve():
     config = get_config()
     try:
@@ -121,7 +135,7 @@ if __name__ == "__main__":
         main()
     elif len(sys.argv) == 2 and (sys.argv[1] == '-f' or sys.argv[1] == '-force'):
         force()
-    elif len(sys.argv) == 2 and sys.argv[1] == 'testsignal':
+    elif len(sys.argv) == 2 and sys.argv[1] == '-testsignal':
         test_signal()
-    elif len(sys.argv) == 2 and sys.argv[1] == 'testvalve':
+    elif len(sys.argv) == 2 and sys.argv[1] == '-testvalve':
         test_valve()
