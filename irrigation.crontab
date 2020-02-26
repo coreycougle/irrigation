@@ -1,0 +1,1 @@
+0 6,20 * * * python /home/pi/irrigation/irrigation.py >/dev/null 2>&1
