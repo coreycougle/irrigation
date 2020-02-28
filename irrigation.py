@@ -1,11 +1,14 @@
 import os
+import ssl
 import sys
 import json
 import time
+import smtplib
 import logging
 import requests
 import configparser
 import RPi.GPIO as IO
+from email.message import EmailMessage
 
 logger = logging.getLogger()
 file_handler = logging.FileHandler('irrigation.log')
@@ -21,11 +24,13 @@ def get_config():
     dir = os.path.abspath(os.path.dirname(__file__))
     config_path = dir + os.sep + 'config'
     config.read(config_path)
-    if(config.has_section('Weather_API') and config.has_section('IO_Config')):
-        return {param:val for (param, val) in config.items('Weather_API')}, {param:val for (param, val) in config.items('IO_Config')}
+    if(config.has_section('Weather_API') and config.has_section('IO_Config') and config.has_section('Email_Config')):
+        return {param:val for (param, val) in config.items('Weather_API')}, \
+               {param:val for (param, val) in config.items('IO_Config')}, \
+               {param:val for (param, val) in config.items('Email_Config')}
     else:
         logger.error('Configuration file is missing a section')
-        return None, None
+        return None, None, None
 
 #Takes the weather configuration and calls the weather API
 # then returns a collection of forcasted weather data
@@ -41,6 +46,22 @@ def get_weather(config):
     else:
         logger.error('Bad Response, %s', response)
         return None
+
+# Takes the Email Config and notifies user with message
+def notify(config):
+    message = EmailMessage()
+    message.set_content("Please see logs for more detail")
+    message['Subject'] = "Irrigation System Did Not Run"
+    message['From'] = config['sender']
+    message['To'] = config['receiver']
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP(config['smtp_server'], int(config['port'])) as smtp:
+        smtp.starttls(context=context)
+        smtp.login(config['sender'], config['app_password'])
+        smtp.send_message(message)
+    logger.info("User Notified")
+
 
 # Takes the io configuration and activates the irrigation valves
 def activate_irrigation(config):
@@ -68,7 +89,7 @@ def activate_irrigation(config):
 # then checks if it will rain today or tomorrow,
 # only activating irrigation if the combined PoP is below 150
 def main():
-    weather_config, io_config = get_config()
+    weather_config, io_config, email_config = get_config()
     weather = None
     if weather_config is not None:
         weather = get_weather(weather_config)
@@ -87,8 +108,11 @@ def main():
             # Once configured, the IO config won't change, so no need to include it with the user notification logic
             logger.error('IO config is missing')
 
-    # else:
-        # todo: Notify user regarding issues with weather API service
+    else:
+        if email_config is not None:
+            notify(email_config)
+        else:
+            logger.error("Email Config is missing")
 
 # Forces the activate_irrigation method when irrigation.py is run with -f or -force
 def force():
@@ -130,6 +154,11 @@ def test_valve():
         IO.output((valve1,valve2), IO.LOW)
         logger.exception('Test Valve Failed: GPIO failure')
 
+# Calls the notify method when irrigation.py is run with -testnotify
+def test_notify():
+    config = get_config()
+    notify(config[2])
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         main()
@@ -139,3 +168,5 @@ if __name__ == "__main__":
         test_signal()
     elif len(sys.argv) == 2 and sys.argv[1] == '-testvalve':
         test_valve()
+    elif len(sys.argv) == 2 and sys.argv[1] == '-testnotify':
+        test_notify()
