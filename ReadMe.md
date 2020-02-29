@@ -52,7 +52,7 @@ Go to https://support.google.com/accounts/answer/185833 and create an app passwo
 Add your Weather Network API key from https://store.api.pelmorex.com  
 Add your country eg. ``CA`` or ``US``  
 Add your city eg. ``Toronto`` or ``New-York``  
-Add your GPIO pins in BCM format eg. ``23`` or ``24`` or ``25``  
+Add your GPIO pins in BCM format eg. ``23`` or ``24,25``  
 Add your sender and receiver email accounts eg. ``your.address@gmail.com``  
 Add your app password that you had generated in the previous section eg. ``yourapppassword``
 
@@ -77,7 +77,7 @@ To check that the valves are connected correctly, run irrigation.py with the -te
 ```
 python irrigation.py -testvalve
 ```
-You should hear or see the valves open for 5 seconds.
+You should hear or see the valves open for 5 seconds each.
 
 To check that the email configuration is correct, run irrigation.py with the -testnotify argument:
 ```

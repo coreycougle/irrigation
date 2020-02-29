@@ -5,8 +5,7 @@ country = CA
 city = Toronto
 
 [IO_Config]
-valve1 = 27
-valve2 = 22
+valves = 22,27
 led = 17
 duration_minutes = 20
 

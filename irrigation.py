@@ -63,26 +63,27 @@ def notify(config):
     logger.info("User Notified")
 
 
-# Takes the io configuration and activates the irrigation valves
+# Takes the io configuration and activates the irrigation valves sequentially
 def activate_irrigation(config):
     try:
         IO.setwarnings(False)
         IO.setmode(IO.BCM)
-        valve1 = int(config['valve1'])
-        valve2 = int(config['valve2'])
+        valve_list = [int(pin) for pin in config['valves'].split(',')]
         led = int(config['led'])
-        IO.setup((valve1, valve2, led), IO.OUT)
-        IO.output((valve1, valve2), IO.HIGH)
-        logger.info("Irrigation activated")
-        for i in range(int(config['duration_minutes']) * 30):
-            IO.output(led, IO.HIGH)
-            time.sleep(1)
-            IO.output(led, IO.LOW)
-            time.sleep(1)
-        IO.output((valve1, valve2, led), IO.LOW)
-        logger.info("Irrigation deactivated")
+        IO.setup(led, IO.OUT)
+        for valve in valve_list:
+            IO.setup(valve, IO.OUT)
+            IO.output(valve, IO.HIGH)
+            logger.info(f'Valve on pin {valve} activated')
+            for i in range(int(config['duration_minutes']) * 30):
+                IO.output(led, IO.HIGH)
+                time.sleep(1)
+                IO.output(led, IO.LOW)
+                time.sleep(1)
+            IO.output(valve, IO.LOW)
+            logger.info(f'Valve on pin {valve} deactivated')
     except Exception:
-        IO.output((valve1, valve2, led), IO.LOW)
+        IO.cleanup()
         logger.exception('GPIO failure')
 
 # Checks if weather and io_config contain usable data,
@@ -143,15 +144,15 @@ def test_valve():
     try:
         IO.setwarnings(False)
         IO.setmode(IO.BCM)
-        valve1 = int(config[1]['valve1'])
-        valve2 = int(config[1]['valve2'])
-        IO.setup((valve1,valve2), IO.OUT)
-        IO.output((valve1,valve2), IO.HIGH)
-        time.sleep(5)
-        IO.output((valve1,valve2), IO.LOW)
-        logger.info("Test Valve Successful")
+        valve_list = [int(pin) for pin in config[1]['valves'].split(',')]
+        for valve in valve_list:
+            IO.setup(valve, IO.OUT)
+            IO.output(valve, IO.HIGH)
+            time.sleep(5)
+            IO.output(valve, IO.LOW)
+            logger.info(f'Test Valve on pin {valve} Successful')
     except Exception:
-        IO.output((valve1,valve2), IO.LOW)
+        IO.cleanup()
         logger.exception('Test Valve Failed: GPIO failure')
 
 # Calls the notify method when irrigation.py is run with -testnotify
