@@ -21,7 +21,7 @@ nano ~/.bashrc
 ```
 At the bottom of the file, add the following lines:
 ```
-alias python='/user/bin/python3'
+alias python='/usr/bin/python3'
 alias pip=pip3
 ```
 Save and exit nano using the save (ctrl + o) and exit (ctrl + x) commands.  
