@@ -11,14 +11,21 @@ import RPi.GPIO as IO
 from email.message import EmailMessage
 
 logger = logging.getLogger()
-file_handler = logging.FileHandler('irrigation.log')
-log_formatter = logging.Formatter('%(asctime)s-%(levelname)s-%(message)s')
-file_handler.setFormatter(log_formatter)
-file_handler.setLevel(logging.DEBUG)
-logger.addHandler(file_handler)
-logger.setLevel(logging.DEBUG)
 
-# Grabs config file and returns weather configuration and io configuration as separate objects or as None
+# Configures logger to be used throughout script
+def configure_logger():
+    dir = os.path.abspath(os.path.dirname(__file__))
+    log_path = dir + os.sep + 'irrigation.log'
+    file_handler = logging.FileHandler(log_path)
+    log_formatter = logging.Formatter('%(asctime)s-%(levelname)s-%(message)s')
+    file_handler.setFormatter(log_formatter)
+    file_handler.setLevel(logging.DEBUG)
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.DEBUG)
+
+configure_logger()
+
+# Grabs config file and returns weather, io, and email configurations as separate objects or as None
 def get_config():
     config = configparser.ConfigParser()
     dir = os.path.abspath(os.path.dirname(__file__))
@@ -91,6 +98,7 @@ def activate_irrigation(config):
 # only activating irrigation if the combined PoP is below 150
 def main():
     weather_config, io_config, email_config = get_config()
+
     weather = None
     if weather_config is not None:
         weather = get_weather(weather_config)
