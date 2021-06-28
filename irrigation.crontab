@@ -1,1 +1,1 @@
-17 6,20 * * * /usr/bin/python3 /home/pi/irrigation/irrigation.py >/dev/null 2>&1
+17 5 * * * /usr/bin/python3 /home/pi/irrigation/irrigation.py >/dev/null 2>&1

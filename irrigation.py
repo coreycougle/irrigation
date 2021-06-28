@@ -39,20 +39,58 @@ def get_config():
         logger.error('Configuration file is missing a section')
         return None, None, None
 
-#Takes the weather configuration and calls the weather API
+# Takes the weather configuration and calls the weather API
 # then returns a collection of forcasted weather data
 def get_weather(config):
-    headers = {'Accept': 'application/json',
-               'x-api-key': config['api_key']}
-    api_url = config['api_url_base'] + config['country'] + '/' + config['city']
+    headers = {'Accept': 'application/json', 'Accept-Encoding': 'gzip'}
+    country = config['country']
+    api_key = config['api_key']
+    city = config['city']
+    country_code = config['country_code']
 
-    response = requests.get(api_url, headers=headers)
+    location_api = config['location_api'].format(country=country, api_key=api_key, city=city, country_code=country_code)
+    locate_url = config['api_url_base'] + location_api
 
-    if response.status_code == 200:
-        return json.loads(response.content.decode('utf-8'))
-    else:
-        logger.error('Bad Response, %s', response)
+    location_response = requests.get(locate_url, headers=headers)
+
+    if location_response.status_code != 200:
+        logger.error('Bad Location Response, %s', location_response)
         return None
+
+    location_data = json.loads(location_response.content.decode('utf-8'))
+    location_key = location_data[0]['Key']
+
+    forecast_api = config['forecast_api'].format(location_key=location_key, api_key=api_key, country_code=country_code)
+    forecast_url = config['api_url_base'] + forecast_api
+
+    forecast_response = requests.get(forecast_url, headers=headers)
+
+    if forecast_response.status_code != 200:
+        logger.error('Bad Forecast Response, %s', location_response)
+        return None
+
+    forecast_data = json.loads(forecast_response.content.decode('utf-8'))
+
+    return forecast_data
+
+def willItRain(weather):
+    popToday = int(weather['DailyForecasts'][0]['Day']['RainProbability'])
+    popTonight = int(weather['DailyForecasts'][0]['Night']['RainProbability'])
+    amountToday = float(weather['DailyForecasts'][0]['Day']['Rain']['Value'])
+    amountTonight = float(weather['DailyForecasts'][0]['Night']['Rain']['Value'])
+
+    popTomorrowDay = int(weather['DailyForecasts'][1]['Day']['RainProbability'])
+    popTomorrowNight = int(weather['DailyForecasts'][1]['Night']['RainProbability'])
+    amountTomorrowDay = float(weather['DailyForecasts'][1]['Day']['Rain']['Value'])
+    amountTomorrowNight = float(weather['DailyForecasts'][1]['Night']['Rain']['Value'])
+
+    itWillRain = {
+        'today': True if popToday > 50 and amountToday > 1 else False,
+        'tonight': True if popTonight > 50 and amountTonight > 1 else False,
+        'tomorrowDay': True if popTomorrowDay > 50 and amountTomorrowDay > 1 else False,
+        'tomorrowNight': True if popTomorrowNight > 50 and amountTomorrowNight > 1 else False
+    }
+    return True in itWillRain.values()
 
 # Takes the Email Config and notifies user with message
 def notify(config):
@@ -69,68 +107,59 @@ def notify(config):
         smtp.send_message(message)
     logger.info("User Notified")
 
-
 # Takes the io configuration and activates the irrigation valves sequentially
-def activate_irrigation(config):
+def activate_irrigation(config, predictedRain):
+    # If rain is predicted, we extend the duration of irrigation to free up more storage capacity
+    multiplier = 3 if predictedRain else 1
+
     try:
         IO.setwarnings(False)
         IO.setmode(IO.BCM)
         valve_list = [int(pin) for pin in config['valves'].split(',')]
+        duration_list = [int(duration) for duration in config['durations'].split(',')]
         led = int(config['led'])
         IO.setup(led, IO.OUT)
-        for valve in valve_list:
-            IO.setup(valve, IO.OUT)
-            IO.output(valve, IO.HIGH)
-            logger.info(f'Valve on pin {valve} activated')
-            for i in range(int(config['duration_minutes']) * 30):
+        for index in range(len(valve_list)):
+            IO.setup(valve_list[index], IO.OUT)
+            IO.output(valve_list[index], IO.HIGH)
+            logger.info(f'Valve on pin {valve_list[index]} activated')
+            # We loop 30 times because each cycle of the notification led is 2 seconds
+            for i in range(duration_list[index] * 30 * multiplier):
                 IO.output(led, IO.HIGH)
                 time.sleep(1)
                 IO.output(led, IO.LOW)
                 time.sleep(1)
-            IO.output(valve, IO.LOW)
-            logger.info(f'Valve on pin {valve} deactivated')
+            IO.output(valve_list[index], IO.LOW)
+            logger.info(f'Valve on pin {valve_list[index]} deactivated')
     except Exception:
         IO.cleanup()
-        logger.exception('GPIO failure')
+        logger.exception('GPIO failure in activate_irrigation')
 
 # Checks if weather and io_config contain usable data,
 # then checks if it will rain today or tomorrow,
-# only activating irrigation if the combined PoP is below 150
+# activating irrigation if it will not rain in the next two days,
+# or dumping the water reserve to capture more predicted rain
 def main():
     weather_config, io_config, email_config = get_config()
 
-    weather = None
-    if weather_config is not None:
-        weather = get_weather(weather_config)
-    else:
-        logger.error('Weather config is missing')
+    if weather_config is None or io_config is None or email_config is None:
+        print('Irrigation failed: Config is missing. Check log file')
+        return
 
-    if weather is not None:
-        popToday = int(weather['LongTermPeriod'][0]['POPPercentDay'])
-        popTomorrow = int(weather['LongTermPeriod'][1]['POPPercentDay'])
-        if popToday + popTomorrow >= 150:
-            logger.info("Irrigation not activated due to PoP of " + str(popToday + popTomorrow) + " in the next 2 days")
-        elif io_config is not None:
-            logger.info('Activating irrigation due to PoP of ' + str((popToday + popTomorrow)/2) + ' in the next 2 days')
-            activate_irrigation(io_config)
-        else:
-            # Once configured, the IO config won't change, so no need to include it with the user notification logic
-            logger.error('IO config is missing')
-
-    else:
-        if email_config is not None:
-            notify(email_config)
-        else:
-            logger.error("Email Config is missing")
+    weather = get_weather(weather_config)
+    predictedRain = willItRain(weather)
+    activate_irrigation(io_config, predictedRain)
 
 # Forces the activate_irrigation method when irrigation.py is run with -f or -force
 def force():
     config = get_config()
+    logger.info("Forcing irrigation")
     activate_irrigation(config[1])
 
-# Flashes the test led when irrigation.py is run with -testsignal
-def test_signal():
+# Flashes the test led when irrigation.py is run with -testcircuit
+def test_circuit():
     config = get_config()
+    logger.info("Testing the circuit")
     try:
         IO.setwarnings(False)
         IO.setmode(IO.BCM)
@@ -141,18 +170,19 @@ def test_signal():
             time.sleep(1)
             IO.output(led, IO.LOW)
             time.sleep(1)
-        logger.info("Test Signal Successful")
+        logger.info("Test Circuit Successful")
     except Exception:
         IO.output(led, IO.LOW)
-        logger.exception('Test Signal Failed: GPIO failure')
+        logger.exception('Test Circuit Failed: GPIO failure')
 
 # Activates the irrigation valves for 5 seconds when irrigation.py is run with -testvalve
 def test_valve():
-    config = get_config()
+    config = get_config()[1]
+    logger.info("Testing the valve electronics and plumbing")
     try:
         IO.setwarnings(False)
         IO.setmode(IO.BCM)
-        valve_list = [int(pin) for pin in config[1]['valves'].split(',')]
+        valve_list = [int(pin) for pin in config['valves'].split(',')]
         for valve in valve_list:
             IO.setup(valve, IO.OUT)
             IO.output(valve, IO.HIGH)
@@ -163,19 +193,43 @@ def test_valve():
         IO.cleanup()
         logger.exception('Test Valve Failed: GPIO failure')
 
+# Tests whether or not weather service is connected correctly by printing the parsed weather data
+def test_weather():
+    config = get_config()[0]
+    logger.info("Testing the Weather API connection")
+    weather = get_weather(config)
+
+    popToday = int(weather['DailyForecasts'][0]['Day']['RainProbability'])
+    popTonight = int(weather['DailyForecasts'][0]['Night']['RainProbability'])
+    amountToday = float(weather['DailyForecasts'][0]['Day']['Rain']['Value'])
+    amountTonight = float(weather['DailyForecasts'][0]['Night']['Rain']['Value'])
+
+    popTomorrowDay = int(weather['DailyForecasts'][1]['Day']['RainProbability'])
+    popTomorrowNight = int(weather['DailyForecasts'][1]['Night']['RainProbability'])
+    amountTomorrowDay = float(weather['DailyForecasts'][1]['Day']['Rain']['Value'])
+    amountTomorrowNight = float(weather['DailyForecasts'][1]['Night']['Rain']['Value'])
+
+    print(f"Today's PoP is {popToday}% with an amount of {amountToday}mm")
+    print(f"Tonight's PoP is {popTonight}% with an amount of {amountTonight}mm")
+    print(f"Tomorrow's PoP is {popTomorrowDay}% with an amount of {amountTomorrowDay}mm")
+    print(f"Tomorrow night's PoP is {popTomorrowNight}% with an amount of {amountTomorrowNight}mm")
+
 # Calls the notify method when irrigation.py is run with -testnotify
 def test_notify():
-    config = get_config()
-    notify(config[2])
+    config = get_config()[2]
+    logger.info("Testing the notification connection")
+    notify(config)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         main()
     elif len(sys.argv) == 2 and (sys.argv[1] == '-f' or sys.argv[1] == '-force'):
         force()
-    elif len(sys.argv) == 2 and sys.argv[1] == '-testsignal':
-        test_signal()
+    elif len(sys.argv) == 2 and sys.argv[1] == '-testcicuit':
+        test_circuit()
     elif len(sys.argv) == 2 and sys.argv[1] == '-testvalve':
         test_valve()
     elif len(sys.argv) == 2 and sys.argv[1] == '-testnotify':
         test_notify()
+    elif len(sys.argv) == 2 and sys.argv[1] == '-testweather':
+        test_weather()

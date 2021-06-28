@@ -1,13 +1,16 @@
 [Weather_API]
-api_key = yourweathernetworkapikey
-api_url_base = https://api.data.pelmorex.com/weather/LongTermForecasts/
-country = CA
-city = Toronto
+api_key = your_accuweather_api_key
+api_url_base = http://dataservice.accuweather.com/
+location_api = locations/v1/cities/{country}/search?apikey={api_key}&q={city}&language={country_code}&details=false&offset=0
+forecast_api = forecasts/v1/daily/5day/{location_key}?apikey={api_key}&language={country_code}&details=true&metric=true
+country = ca
+city = ottawa
+country_code = en-ca
 
 [IO_Config]
 valves = 22,27
 led = 17
-duration_minutes = 20
+durations = 20,40
 
 [Email_Config]
 port = 587

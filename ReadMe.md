@@ -1,5 +1,5 @@
 ## Project Description
-This is a low power, low cost, low environmental impact irrigation system designed to produce better apple and vegetable yields for myself. I use repurposed 55 gallon olive oil drums as rain barrels controlled by a $10 Raspberry Pi Zero W. The logic is a Python script that connects to The Weather Network's API and activates a solenoid valve only if it will not rain today or tomorrow.  
+This is a low power, low cost, low environmental impact irrigation system designed to produce better apple and vegetable yields for myself. I use repurposed 55 gallon olive oil drums as rain barrels controlled by a $10 Raspberry Pi Zero W. The logic is a Python script that connects to Accuweather's API and activates a solenoid valve only if it will not rain today or tomorrow.  
   
 This can be adapted to many uses, feel free to hack it up.
 
@@ -42,16 +42,26 @@ Now navigate to the directory in which you would like to add the irrigation dire
 git clone https://github.com/coreycougle/irrigation.git
 ```
 
+## Install dependencies
+Navigate to the directory in the project containing requirements.txt and run the following command:
+```
+pip install -r requirements.txt
+```
+
 ## Email notification config
 We need to use a Gmail account to send emails from when we get bad data from the weather network.  
 I recommend creating a new gmail account as we will be using a less than ideal authentication method.  
 Set up 2-factor authentication.  
 Go to https://support.google.com/accounts/answer/185833 and create an app password to be used (ensure you are in the gmail account you want this script to access).  
 
+## Create Accuwaether API key
+Create a Limited Trial Account at https://developer.accuweather.com/ and then "Add a New App" under MyApps
+Find API key uner the Key tab within your new "App"
+
 ## Update Config File
-Add your Weather Network API key from https://store.api.pelmorex.com  
-Add your country eg. ``CA`` or ``US``  
-Add your city eg. ``Toronto`` or ``New-York``  
+Add your Accuweather API key from https://developer.accuweather.com/ 
+Add your country eg. ``ca`` or ``us`` or whatever
+Add your city eg. ``toronto`` or whatever  
 Add your GPIO pins in BCM format eg. ``23`` or ``24,25``  
 Add your sender and receiver email accounts eg. ``your.address@gmail.com``  
 Add your app password that you had generated in the previous section eg. ``yourapppassword``
