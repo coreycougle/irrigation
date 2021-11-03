@@ -108,7 +108,7 @@ def notify(config):
     logger.info("User Notified")
 
 # Takes the io configuration and activates the irrigation valves sequentially
-def activate_irrigation(config, predictedRain):
+def activate_irrigation(config, predictedRain=True):
     # If rain is predicted, we extend the duration of irrigation to free up more storage capacity
     multiplier = 3 if predictedRain else 1
 
